@@ -2,19 +2,38 @@
 using UnityEngine.UI;
 using System.Collections;
 using UnityEngine.Audio;
+using System;
 
 public class CarScriptSharp : MonoBehaviour {
 	public WheelCollider rearRightTire;
+	private int rearRightTorque = 0;
 	public WheelCollider rearLeftTire;
+	private int rearLeftTorque = 0;
 	public WheelCollider frontRightTire;
+	private int frontRightTorque = 0;
 	public WheelCollider frontLeftTire;
+	private int frontLeftTorque = 0;
+
+	public Camera playerCamera;
+
+	public int forwardTorque = 9000;
+	public int reverseTorque = -9000;
+	public int turnTorque = 9000;
+	public int turnAngle = 50;
+	public int brakeTorque = 20000;
+	private int startBrakeTorque;
+
+	private bool boostObject;
+	private bool boostRamp;
+	private int boostedTimes;
+	public int boostCycles = 15;
+
+	private bool braking = false;
 
 	public Text scoreText;
 	public int scoreCounter = 0000;
 
 	public Text driftText;
-
-	double playerXLast;
 
 	public double timeSaver;
 
@@ -23,13 +42,16 @@ public class CarScriptSharp : MonoBehaviour {
 	
 	private string moveForward = "w"; //The strings for the controls
 	private string moveLeft    = "a";
-	private string moveRight   = "d";
 	private string moveBack    = "s";
+	private string moveRight   = "d";
 	
 	private bool forward = false; //Booleans for controls
 	private bool left    = false;
 	private bool right   = false;
 	private bool back    = false;
+
+	private Vector3 playerReset = new Vector3 (50, 50, 50);
+
 	
 	void Start () {
 		playerBody = GetComponent<Rigidbody>();
@@ -38,7 +60,7 @@ public class CarScriptSharp : MonoBehaviour {
 		setCountText();
 		driftText.enabled = false;
 	}
-	////END Start()////
+	//END Start()//
 	
 	void FixedUpdate () {
 		forward = Input.GetKey(moveForward); //Refreash the booleans based on their corresponding buttons state
@@ -46,53 +68,77 @@ public class CarScriptSharp : MonoBehaviour {
 		right   = Input.GetKey(moveRight);
 		back    = Input.GetKey(moveBack);
 
+		resetTorqueAndAngles();
+
 		if (forward && !back) {
-			rearRightTire.motorTorque = 90000;
-			rearLeftTire.motorTorque = 90000;
+			rearRightTorque = forwardTorque;
+			rearLeftTorque = forwardTorque;
+			braking = false;
 		} else if (back && !forward) {
-			rearRightTire.motorTorque = -9000;
-			rearLeftTire.motorTorque = -9000;
-		} else {
-			rearRightTire.motorTorque = 0;
-			rearLeftTire.motorTorque = 0;
+			rearRightTorque = reverseTorque;
+			rearLeftTorque = reverseTorque;
+			braking = false;
 		}
 
 		if (left && !right) { //If the left key is pressed
-			frontLeftTire.steerAngle = -50;
-			frontRightTire.steerAngle = -50;
-			rearRightTire.motorTorque = 90000;
-			rearLeftTire.motorTorque = -90000;
-			scoreCounter += 1;
+			frontLeftTire.steerAngle = -turnAngle;
+			frontRightTire.steerAngle = -turnAngle;
+			//rearRightTorque = turnTorque;
+			//rearLeftTorque = -turnTorque;
 			driftText.enabled = true;
 			smoothIncrease();
+			braking = false;
 		} else if (right && !left) { //If the right key is pressed
-			frontRightTire.steerAngle = 50;
-			frontLeftTire.steerAngle = 50;
-			rearRightTire.motorTorque = -90000;
-			rearLeftTire.motorTorque = 90000;
-			scoreCounter += 1;
+			frontRightTire.steerAngle = turnAngle;
+			frontLeftTire.steerAngle = turnAngle;
+			//rearRightTorque = -turnTorque;
+			//rearLeftTorque = turnTorque;
 			driftText.enabled = true;
 			smoothIncrease();
+			braking = false;
 		} else {
-			frontLeftTire.steerAngle = 0;
-			frontRightTire.steerAngle = 0;
 			driftText.enabled = false;
 		}
 
 		if (Input.GetKey("space")) {
-			rearLeftTire.brakeTorque = 200;
-			rearRightTire.brakeTorque = 200;
-			frontLeftTire.brakeTorque = 200;
-			frontRightTire.brakeTorque = 200;
-		} else {
-			frontLeftTire.brakeTorque = 0;
-			frontRightTire.brakeTorque = 0;
-			rearLeftTire.brakeTorque = 0;
-			rearRightTire.brakeTorque = 0;
+			braking = true;
+		} else if (!left && !right && !forward && !back) {
+			braking = true;
 		}
+
+		if ((boostObject || boostRamp) && (boostedTimes <= boostCycles)) {
+			if (boostRamp) {
+				rearLeftTorque = rearLeftTorque + 7000;
+				rearRightTorque= rearRightTorque + 7000;
+				frontLeftTorque = rearLeftTorque + 7000;
+				frontRightTorque = rearRightTorque + 7000;
+			}
+			if (boostObject) {
+				rearLeftTorque = rearLeftTorque + 2000;
+				rearRightTorque= rearRightTorque + 2000;
+				frontLeftTorque = rearLeftTorque + 2000;
+				frontRightTorque = rearRightTorque + 2000;
+			}
+			++boostedTimes;
+		} else if (boostedTimes > boostCycles) {
+			boostedTimes = 0;
+			boostObject = false;
+		}
+
 		setCountText();
+		setTorques();
+
+		if (Input.GetKey("1")) {
+			playerBody.MovePosition(playerReset);
+		}
+		if (Input.GetKey("e")) {
+			playerCamera.transform.Rotate(0, -1, 0);
+		}
+		if (Input.GetKey("q")) {
+			playerCamera.transform.Rotate(0, 1, 0);
+		}
 	}
-	////END FixedUpdate()////
+	//END FixedUpdate()//
 
 	void OnTriggerEnter(Collider other) 
 	{
@@ -100,23 +146,62 @@ public class CarScriptSharp : MonoBehaviour {
 		{
 			other.gameObject.SetActive (false);
 			scoreCounter += 1000;
+			boostObject = true;
+			boostedTimes = 0;
+		} else if (other.gameObject.CompareTag ("BadCollectable"))
+		{
+			other.gameObject.SetActive (false);
+			scoreCounter -= 500;
+			boostObject = false;
+			boostRamp = false;
 		}
 
 		if (other.gameObject.CompareTag ("Boost")) {
-			rearLeftTire.motorTorque = rearLeftTire.motorTorque + 80000;
-			rearRightTire.motorTorque = rearRightTire.motorTorque + 80000;
+			boostRamp = true;
+			boostedTimes = 0;
 		}
 	}
+	//END OnTriggerEnter()//
 
 	void setCountText() {
 		scoreText.text = "SCORE: " + scoreCounter.ToString();
 	}
+	//END setCountText()//
 
 	void smoothIncrease() {
-		bool shouldRun = (Time.fixedDeltaTime >= 1) ? true : false;
-		if (shouldRun) {
-			++scoreCounter;
+		timeSaver += Time.fixedDeltaTime;
+
+		if (timeSaver >= 1) {
+			scoreCounter += 10;
+			timeSaver = 0;
 		}
 	}
+	//END smoothIncrease()//
+
+	void resetTorqueAndAngles() {
+		rearRightTorque = 0;
+		rearLeftTorque = 0;
+		frontLeftTorque = 0;
+		frontRightTorque = 0;
+		frontLeftTire.steerAngle = 0;
+		frontRightTire.steerAngle = 0;
+		brakeTorque = startBrakeTorque;
+	}
+	//END resetTorqueAndAngles//
+
+	void setTorques() {
+		if (!braking) {
+			rearLeftTire.motorTorque = rearLeftTorque;
+			rearRightTire.motorTorque = rearRightTorque;
+			frontLeftTire.motorTorque = frontLeftTorque;
+			frontRightTire.motorTorque = frontRightTorque;
+		} else {
+			rearLeftTire.brakeTorque = brakeTorque;
+			rearRightTire.brakeTorque = brakeTorque;
+			frontLeftTire.brakeTorque = brakeTorque;
+			frontRightTire.brakeTorque = brakeTorque;
+		}
+	}
+	//END setTorques//
 }
-////END PlayerController Class////
+//END PlayerController Class//
