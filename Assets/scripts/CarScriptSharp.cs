@@ -4,6 +4,8 @@ using System.Collections;
 using UnityEngine.Audio;
 using System;
 
+//TODO lerp player speed between what it should be
+
 public class CarScriptSharp : MonoBehaviour {
 	public WheelCollider rearRightTire;
 	private int rearRightTorque = 0;
@@ -21,12 +23,13 @@ public class CarScriptSharp : MonoBehaviour {
 	public int turnTorque = 9000;
 	public int turnAngle = 50;
 	public int brakeTorque = 20000;
-	private int startBrakeTorque;
 
-	private bool boostObject;
-	private bool boostRamp;
-	private int boostedTimes;
-	public int boostCycles = 15;
+	private bool boostObject = false;
+	private bool endObject = false;
+	private bool boostRamp = false;
+	private bool endRamp = false;
+	private int boostsLeft;
+	public int maxBoosts = 15;
 
 	private bool braking = false;
 
@@ -50,13 +53,13 @@ public class CarScriptSharp : MonoBehaviour {
 	private bool right   = false;
 	private bool back    = false;
 
-	private Vector3 playerReset = new Vector3 (50, 50, 50);
+	private Vector3 playerReset = new Vector3 (60, 5, 60);
 
 	
 	void Start () {
 		playerBody = GetComponent<Rigidbody>();
 		playerBody.centerOfMass = center;
-		Physics.gravity = new Vector3(0, -100.0F, 0);
+		Physics.gravity = new Vector3(0, -90.0F, 0);
 		setCountText();
 		driftText.enabled = false;
 	}
@@ -75,24 +78,20 @@ public class CarScriptSharp : MonoBehaviour {
 			rearLeftTorque = forwardTorque;
 			braking = false;
 		} else if (back && !forward) {
-			rearRightTorque = reverseTorque;
-			rearLeftTorque = reverseTorque;
+			rearRightTorque = -reverseTorque;
+			rearLeftTorque = -reverseTorque;
 			braking = false;
 		}
 
 		if (left && !right) { //If the left key is pressed
 			frontLeftTire.steerAngle = -turnAngle;
 			frontRightTire.steerAngle = -turnAngle;
-			//rearRightTorque = turnTorque;
-			//rearLeftTorque = -turnTorque;
 			driftText.enabled = true;
 			smoothIncrease();
 			braking = false;
 		} else if (right && !left) { //If the right key is pressed
 			frontRightTire.steerAngle = turnAngle;
 			frontLeftTire.steerAngle = turnAngle;
-			//rearRightTorque = -turnTorque;
-			//rearLeftTorque = turnTorque;
 			driftText.enabled = true;
 			smoothIncrease();
 			braking = false;
@@ -102,31 +101,30 @@ public class CarScriptSharp : MonoBehaviour {
 
 		if (Input.GetKey("space")) {
 			braking = true;
-		} else if (!left && !right && !forward && !back) {
-			braking = true;
 		}
 
-		if ((boostObject || boostRamp) && (boostedTimes <= boostCycles)) {
+		if ((boostsLeft <= maxBoosts)) {
 			if (boostRamp) {
-				rearLeftTorque = rearLeftTorque + 7000;
-				rearRightTorque= rearRightTorque + 7000;
-				frontLeftTorque = rearLeftTorque + 7000;
-				frontRightTorque = rearRightTorque + 7000;
+				applyBoost(100000);
+			} else if (boostObject) {
+				applyBoost(2000);
 			}
-			if (boostObject) {
-				rearLeftTorque = rearLeftTorque + 2000;
-				rearRightTorque= rearRightTorque + 2000;
-				frontLeftTorque = rearLeftTorque + 2000;
-				frontRightTorque = rearRightTorque + 2000;
-			}
-			++boostedTimes;
-		} else if (boostedTimes > boostCycles) {
-			boostedTimes = 0;
+		} else if (boostsLeft > maxBoosts) {
+			boostsLeft = 0;
 			boostObject = false;
+			endObject = true;
+			boostRamp = false;
+			endRamp = true;
 		}
 
-		setCountText();
-		setTorques();
+		if (endRamp) {
+			applyBoost(-20000000);
+			endRamp = false;
+		}
+		if (endObject) {
+			applyBoost(-2000);
+			endRamp = false;
+		}
 
 		if (Input.GetKey("1")) {
 			playerBody.MovePosition(playerReset);
@@ -137,6 +135,10 @@ public class CarScriptSharp : MonoBehaviour {
 		if (Input.GetKey("q")) {
 			playerCamera.transform.Rotate(0, 1, 0);
 		}
+
+		brakeCar(braking);
+		setCountText();
+		setTorques();
 	}
 	//END FixedUpdate()//
 
@@ -147,9 +149,8 @@ public class CarScriptSharp : MonoBehaviour {
 			other.gameObject.SetActive (false);
 			scoreCounter += 1000;
 			boostObject = true;
-			boostedTimes = 0;
-		} else if (other.gameObject.CompareTag ("BadCollectable"))
-		{
+			boostsLeft = 0;
+		} else if (other.gameObject.CompareTag ("BadCollectable")) {
 			other.gameObject.SetActive (false);
 			scoreCounter -= 500;
 			boostObject = false;
@@ -158,7 +159,7 @@ public class CarScriptSharp : MonoBehaviour {
 
 		if (other.gameObject.CompareTag ("Boost")) {
 			boostRamp = true;
-			boostedTimes = 0;
+			boostsLeft = 0;
 		}
 	}
 	//END OnTriggerEnter()//
@@ -185,23 +186,51 @@ public class CarScriptSharp : MonoBehaviour {
 		frontRightTorque = 0;
 		frontLeftTire.steerAngle = 0;
 		frontRightTire.steerAngle = 0;
-		brakeTorque = startBrakeTorque;
 	}
 	//END resetTorqueAndAngles//
 
 	void setTorques() {
-		if (!braking) {
-			rearLeftTire.motorTorque = rearLeftTorque;
-			rearRightTire.motorTorque = rearRightTorque;
-			frontLeftTire.motorTorque = frontLeftTorque;
-			frontRightTire.motorTorque = frontRightTorque;
-		} else {
-			rearLeftTire.brakeTorque = brakeTorque;
-			rearRightTire.brakeTorque = brakeTorque;
-			frontLeftTire.brakeTorque = brakeTorque;
-			frontRightTire.brakeTorque = brakeTorque;
-		}
+		rearLeftTire.motorTorque = rearLeftTorque;
+		rearRightTire.motorTorque = rearRightTorque;
+		frontLeftTire.motorTorque = frontLeftTorque;
+		frontRightTire.motorTorque = frontRightTorque;
 	}
 	//END setTorques//
+
+	void brakeCar (bool brake) {
+		if (brake) {
+			rearLeftTorque = 0;
+			rearRightTorque = 0;
+			frontLeftTorque = 0;
+			frontRightTorque = 0;
+
+			rearRightTire.brakeTorque = 1800;
+			rearLeftTire.brakeTorque = 1800;
+			frontLeftTire.brakeTorque = 1800;
+			frontRightTire.brakeTorque = 1800;
+		} else {
+			rearRightTire.brakeTorque = 0;
+			rearLeftTire.brakeTorque = 0;
+			frontLeftTire.brakeTorque = 0;
+			frontRightTire.brakeTorque = 0;
+		}
+	}
+	//END brakeCar()//
+
+	void applyBoost(int boostLevel) {
+		if (boostLevel > 0) {
+			rearLeftTorque = rearLeftTorque + boostLevel;
+			rearRightTorque= rearRightTorque + boostLevel;
+			frontLeftTorque = rearLeftTorque + boostLevel;
+			frontRightTorque = rearRightTorque + boostLevel;
+			++boostsLeft;
+		} else {
+			rearRightTire.brakeTorque = boostLevel;
+			rearLeftTire.brakeTorque = boostLevel;
+			frontLeftTire.brakeTorque = boostLevel;
+			frontRightTire.brakeTorque = boostLevel;
+		}
+	}
+	//END applyBoost()//
 }
 //END PlayerController Class//
