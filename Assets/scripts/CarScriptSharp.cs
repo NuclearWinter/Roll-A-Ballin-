@@ -18,6 +18,8 @@ public class CarScriptSharp : MonoBehaviour {
 
 	public Camera playerCamera;
 
+	public int deltaSpeed = 20;
+
 	public int forwardTorque = 9000;
 	public int reverseTorque = -9000;
 	public int turnTorque = 9000;
@@ -62,6 +64,7 @@ public class CarScriptSharp : MonoBehaviour {
 		Physics.gravity = new Vector3(0, -90.0F, 0);
 		setCountText();
 		driftText.enabled = false;
+		reverseTorque *= -1;
 	}
 	//END Start()//
 	
@@ -72,15 +75,14 @@ public class CarScriptSharp : MonoBehaviour {
 		back    = Input.GetKey(moveBack);
 
 		resetTorqueAndAngles();
+		braking = false;
 
 		if (forward && !back) {
-			rearRightTorque = forwardTorque;
-			rearLeftTorque = forwardTorque;
-			braking = false;
+			rearRightTorque = applySpeedChange (forwardTorque, rearRightTorque);
+			rearLeftTorque = applySpeedChange (forwardTorque, rearRightTorque);
 		} else if (back && !forward) {
-			rearRightTorque = -reverseTorque;
-			rearLeftTorque = -reverseTorque;
-			braking = false;
+			rearRightTorque = applySpeedChange (reverseTorque, rearRightTorque);
+			rearLeftTorque = applySpeedChange(reverseTorque, rearLeftTorque);
 		}
 
 		if (left && !right) { //If the left key is pressed
@@ -88,13 +90,11 @@ public class CarScriptSharp : MonoBehaviour {
 			frontRightTire.steerAngle = -turnAngle;
 			driftText.enabled = true;
 			smoothIncrease();
-			braking = false;
 		} else if (right && !left) { //If the right key is pressed
 			frontRightTire.steerAngle = turnAngle;
 			frontLeftTire.steerAngle = turnAngle;
 			driftText.enabled = true;
 			smoothIncrease();
-			braking = false;
 		} else {
 			driftText.enabled = false;
 		}
@@ -199,10 +199,10 @@ public class CarScriptSharp : MonoBehaviour {
 
 	void brakeCar (bool brake) {
 		if (brake) {
-			rearLeftTorque = 0;
-			rearRightTorque = 0;
-			frontLeftTorque = 0;
-			frontRightTorque = 0;
+			rearLeftTorque = applySpeedChange (0, rearLeftTorque);
+			rearRightTorque = applySpeedChange (0, rearLeftTorque);
+			frontLeftTorque = applySpeedChange (0, rearLeftTorque);
+			frontRightTorque = applySpeedChange (0, rearLeftTorque);
 
 			rearRightTire.brakeTorque = 1800;
 			rearLeftTire.brakeTorque = 1800;
@@ -219,10 +219,10 @@ public class CarScriptSharp : MonoBehaviour {
 
 	void applyBoost(int boostLevel) {
 		if (boostLevel > 0) {
-			rearLeftTorque = rearLeftTorque + boostLevel;
-			rearRightTorque= rearRightTorque + boostLevel;
-			frontLeftTorque = rearLeftTorque + boostLevel;
-			frontRightTorque = rearRightTorque + boostLevel;
+			rearLeftTorque = applySpeedChange (rearLeftTorque + boostLevel, rearLeftTorque);
+			rearRightTorque= applySpeedChange (rearRightTorque + boostLevel, rearRightTorque);
+			frontLeftTorque = applySpeedChange (rearLeftTorque + boostLevel, rearLeftTorque);
+			frontRightTorque = applySpeedChange (rearRightTorque + boostLevel, rearRightTorque);
 			++boostsLeft;
 		} else {
 			rearRightTire.brakeTorque = boostLevel;
@@ -232,5 +232,11 @@ public class CarScriptSharp : MonoBehaviour {
 		}
 	}
 	//END applyBoost()//
+
+	int applySpeedChange (int target, int current) {
+		int returnValue = (int) Mathf.Lerp (current, target, deltaSpeed);
+		return returnValue;
+	}
+	//END applySpeedChange()//app
 }
 //END PlayerController Class//
